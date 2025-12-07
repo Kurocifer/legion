@@ -15,7 +15,7 @@ public class LegionTaskServiceApplication {
 
     @GetMapping("/")
     public String status() {
-        return "Legion Task Service: Operational";
+        return "Legion Task Service: Operational or is it ?";
     }
 
 }
