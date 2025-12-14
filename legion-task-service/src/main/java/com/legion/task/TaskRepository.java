@@ -25,7 +25,7 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
     // Find tasks in sprint by status
     List<Task> findBySprintIdAndStatus(Long sprintId, TaskStatus status);
 
-    // Get current biggest task number for auto-increment per project
+    // Get max task number for auto-increment per project
     @Query("SELECT COALESCE(MAX(t.taskNumber), 0) FROM Task t WHERE t.project.id = :projectId")
     Integer findMaxTaskNumberByProjectId(@Param("projectId") Long projectId);
 
