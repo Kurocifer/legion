@@ -115,7 +115,7 @@ public class TaskService {
         Task task = taskRepo.findById(taskId)
                 .orElseThrow(() -> new RuntimeException("Task not found"));
 
-        // TODO: Add Sprint validation
+        // TODO: Later on Add Sprint validation
         task.setSprint(null);
         return taskRepo.save(task);
     }
