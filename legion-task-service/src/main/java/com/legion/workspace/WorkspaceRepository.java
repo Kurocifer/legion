@@ -10,5 +10,5 @@ public interface WorkspaceRepository extends JpaRepository<Workspace, Long> {
 
     Optional<Workspace> findBySlug(String slug);
 
-    boolean existsSlug(String slug);
+    boolean existsBySlug(String slug);
 }
