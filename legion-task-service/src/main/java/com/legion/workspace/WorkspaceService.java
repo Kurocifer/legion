@@ -39,7 +39,7 @@ public class WorkspaceService {
     /**
      * Get workspace by slug
      */
-    public Workspace getWorkSpaceBySlug(String slug) {
+    public Workspace getWorkspaceBySlug(String slug) {
         return workspaceRepo.findBySlug(slug)
                 .orElseThrow(() -> new RuntimeException("Work space not found"));
     }

@@ -1,5 +1,6 @@
 package com.legion.task;
 
+import com.legion.common.exception.ResourceNotFoundException;
 import com.legion.project.Project;
 import com.legion.project.ProjectRepository;
 import com.legion.user.User;
@@ -118,5 +119,10 @@ public class TaskService {
         // TODO: Later on Add Sprint validation
         task.setSprint(null);
         return taskRepo.save(task);
+    }
+
+    public Task getTaskById(Long taskId) {
+        return taskRepo.findById(taskId)
+                .orElseThrow(() -> new ResourceNotFoundException("Task", taskId));
     }
 }
