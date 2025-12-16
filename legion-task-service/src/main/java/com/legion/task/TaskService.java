@@ -1,6 +1,7 @@
 package com.legion.task;
 
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.stereotype.Service;
 import com.legion.common.exception.InvalidOperationException;
 import com.legion.common.exception.ResourceNotFoundException;
 import com.legion.common.exception.UnauthorizedException;
@@ -15,6 +16,7 @@ import jakarta.transaction.Transactional;
 
 import java.util.List;
 
+@Service
 public class TaskService {
 
     private final TaskRepository taskRepo;
