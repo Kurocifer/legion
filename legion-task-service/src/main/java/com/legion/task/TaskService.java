@@ -1,6 +1,8 @@
 package com.legion.task;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import com.legion.common.exception.ResourceNotFoundException;
+import com.legion.config.TaskConfig;
 import com.legion.project.Project;
 import com.legion.project.ProjectRepository;
 import com.legion.user.User;
@@ -14,13 +16,15 @@ public class TaskService {
     private final TaskRepository taskRepo;
     private final ProjectRepository projectRepo;
     private final UserRepository userRepo;
+    private final TaskConfig taskConfig;
 
     public TaskService(TaskRepository taskRepo,
                        ProjectRepository projectRepo,
-                       UserRepository userRepo) {
+                       UserRepository userRepo, TaskConfig taskConfig) {
         this.taskRepo = taskRepo;
         this.projectRepo = projectRepo;
         this.userRepo = userRepo;
+        this.taskConfig = taskConfig;
     }
 
     /**
@@ -30,38 +34,61 @@ public class TaskService {
     @Transactional
     public Task createTask(Long projectId, Long reporterId, String title,
                            String description, TaskStatus status, Priority priority,
-                           Long assignedId) {
-        
-        // validate the existence of the project
+                           Long assigneeId) {
+
+        int maxRetries = taskConfig.getCreationRetryAttempts();
+        long retryDelay = taskConfig.getCreationRetryDelayMs();
+        int attempt = 0;
+
+        while (attempt < maxRetries) {
+            try {
+                return attemptCreateTask(projectId, reporterId, title, description,
+                        status, priority, assigneeId);
+            } catch (DataIntegrityViolationException e) {
+                attempt++;
+                if (attempt >= maxRetries) {
+                    throw new RuntimeException("Failed to create task after " + maxRetries + " attempts", e);
+                }
+
+                try {
+                    Thread.sleep(retryDelay);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException("Task creation interrupted", ie);
+                }
+            }
+        }
+
+        throw new RuntimeException("Failed to create task");
+    }
+
+    private Task attemptCreateTask(Long projectId, Long reporterId, String title,
+                                   String description, TaskStatus status,
+                                   Priority priority, Long assigneeId) {
+
         Project project = projectRepo.findById(projectId)
                 .orElseThrow(() -> new RuntimeException("Project not found"));
 
-        // Validate reporter exists
         User reporter = userRepo.findById(reporterId)
                 .orElseThrow(() -> new RuntimeException("Reporter not found"));
 
-        // Validate reporter belongs to same workspace as project
         if (!reporter.getWorkspace().getId().equals(project.getWorkspace().getId())) {
             throw new RuntimeException("Reporter must belong to project's workspace");
         }
 
-        // Validate assignee if provided
         User assignee = null;
-        if (assignedId != null) {
-            assignee = userRepo.findById(assignedId)
+        if (assigneeId != null) {
+            assignee = userRepo.findById(assigneeId)
                     .orElseThrow(() -> new RuntimeException("Assignee not found"));
 
-            // Check assignee is in same workspace
             if (!assignee.getWorkspace().getId().equals(project.getWorkspace().getId())) {
                 throw new RuntimeException("Assignee must belong to project's workspace");
             }
         }
 
-        // Auto generate task number
         Integer maxTaskNumber = taskRepo.findMaxTaskNumberByProjectId(projectId);
         Integer nextTaskNumber = maxTaskNumber + 1;
 
-        // Create Task
         Task task = new Task();
         task.setProject(project);
         task.setReporter(reporter);

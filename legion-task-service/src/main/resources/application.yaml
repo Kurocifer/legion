@@ -17,3 +17,9 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
     show-sql: true
+
+# Custom Legion configurations
+legion:
+  task:
+    creation-retry-attempts: 3
+    creation-retry-delay-ms: 50
