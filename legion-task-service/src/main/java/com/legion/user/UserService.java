@@ -1,6 +1,8 @@
 package com.legion.user;
 
 import org.springframework.stereotype.Service;
+import com.legion.common.exception.DuplicateResourceException;
+import com.legion.common.exception.ResourceNotFoundException;
 import com.legion.workspace.Workspace;
 import com.legion.workspace.WorkspaceRepository;
 import jakarta.transaction.Transactional;
@@ -25,12 +27,12 @@ public class UserService {
     public User createUser(String email, String password, String fullName, Long workSpaceId, Role role) {
 
         if (userRepo.existsByEmail(email)) {
-            throw new RuntimeException("User with email '" + email + "' already exists");
+            throw new DuplicateResourceException("User", "email", email);
         }
 
         // Ensure workspace exists
         Workspace workspace = workspaceRepo.findById(workSpaceId)
-                .orElseThrow(() -> new RuntimeException("Work space doesn't exists"));
+                .orElseThrow(() -> new ResourceNotFoundException("Workspace", workSpaceId));
 
         User user = new User(email, password, fullName, role);
         user.setWorkspace(workspace);
@@ -43,7 +45,7 @@ public class UserService {
      */
     public User getUserById(Long userId) {
         return userRepo.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User", userId));
     }
 
     /**
@@ -51,7 +53,7 @@ public class UserService {
      */
     public User getUserByEmail(String email) {
         return userRepo.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User", "email", email));
     }
 
     /**

@@ -1,10 +1,14 @@
 package com.legion.task;
 
 import org.springframework.dao.DataIntegrityViolationException;
+import com.legion.common.exception.InvalidOperationException;
 import com.legion.common.exception.ResourceNotFoundException;
+import com.legion.common.exception.UnauthorizedException;
 import com.legion.config.TaskConfig;
 import com.legion.project.Project;
 import com.legion.project.ProjectRepository;
+import com.legion.sprint.Sprint;
+import com.legion.sprint.SprintRepository;
 import com.legion.user.User;
 import com.legion.user.UserRepository;
 import jakarta.transaction.Transactional;
@@ -17,14 +21,17 @@ public class TaskService {
     private final ProjectRepository projectRepo;
     private final UserRepository userRepo;
     private final TaskConfig taskConfig;
+    private final SprintRepository sprintRepo;
 
     public TaskService(TaskRepository taskRepo,
                        ProjectRepository projectRepo,
-                       UserRepository userRepo, TaskConfig taskConfig) {
+                       UserRepository userRepo,
+                       TaskConfig taskConfig, SprintRepository sprintRepo) {
         this.taskRepo = taskRepo;
         this.projectRepo = projectRepo;
         this.userRepo = userRepo;
         this.taskConfig = taskConfig;
+        this.sprintRepo = sprintRepo;
     }
 
     /**
@@ -47,42 +54,44 @@ public class TaskService {
             } catch (DataIntegrityViolationException e) {
                 attempt++;
                 if (attempt >= maxRetries) {
-                    throw new RuntimeException("Failed to create task after " + maxRetries + " attempts", e);
+                    throw new InvalidOperationException(
+                            "Failed to create task after " + maxRetries + " attempts. Please try again.", e);
                 }
 
                 try {
                     Thread.sleep(retryDelay);
                 } catch (InterruptedException ie) {
                     Thread.currentThread().interrupt();
-                    throw new RuntimeException("Task creation interrupted", ie);
+                    throw new InvalidOperationException("Task creation interrupted", ie);
                 }
             }
         }
 
-        throw new RuntimeException("Failed to create task");
+        throw new InvalidOperationException("Failed to create task");
     }
 
     private Task attemptCreateTask(Long projectId, Long reporterId, String title,
                                    String description, TaskStatus status,
                                    Priority priority, Long assigneeId) {
 
+        // Use custom exceptions instead of RuntimeException
         Project project = projectRepo.findById(projectId)
-                .orElseThrow(() -> new RuntimeException("Project not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Project", projectId));
 
         User reporter = userRepo.findById(reporterId)
-                .orElseThrow(() -> new RuntimeException("Reporter not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User", reporterId));
 
         if (!reporter.getWorkspace().getId().equals(project.getWorkspace().getId())) {
-            throw new RuntimeException("Reporter must belong to project's workspace");
+            throw new UnauthorizedException("Reporter must belong to project's workspace");
         }
 
         User assignee = null;
         if (assigneeId != null) {
             assignee = userRepo.findById(assigneeId)
-                    .orElseThrow(() -> new RuntimeException("Assignee not found"));
+                    .orElseThrow(() -> new ResourceNotFoundException("User", assigneeId));
 
             if (!assignee.getWorkspace().getId().equals(project.getWorkspace().getId())) {
-                throw new RuntimeException("Assignee must belong to project's workspace");
+                throw new UnauthorizedException("Assignee must belong to project's workspace");
             }
         }
 
@@ -129,7 +138,7 @@ public class TaskService {
     @Transactional
     public Task updateTaskStatus(Long taskId, TaskStatus newStatus) {
         Task task = taskRepo.findById(taskId)
-                .orElseThrow(() -> new RuntimeException("Task not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Task not found", taskId));
 
         task.setStatus(newStatus);
         return taskRepo.save(task);
@@ -141,10 +150,12 @@ public class TaskService {
     @Transactional
     public Task assignTaskToSprint(Long taskId, Long sprintId) {
         Task task = taskRepo.findById(taskId)
-                .orElseThrow(() -> new RuntimeException("Task not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Task not found", taskId));
 
-        // TODO: Later on Add Sprint validation
-        task.setSprint(null);
+        Sprint sprint = sprintRepo.findById(sprintId)
+                        .orElseThrow(() -> new ResourceNotFoundException("Spring not found", sprintId));
+
+        task.setSprint(sprint);
         return taskRepo.save(task);
     }
 

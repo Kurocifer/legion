@@ -1,5 +1,6 @@
 package com.legion.sprint;
 
+import com.legion.common.exception.ResourceNotFoundException;
 import com.legion.project.Project;
 import com.legion.project.ProjectRepository;
 import org.springframework.stereotype.Service;
@@ -24,7 +25,7 @@ public class SprintService {
                                LocalDate startDate, LocalDate endDate) {
 
         Project project = projectRepo.findById(projectId)
-                .orElseThrow(() -> new RuntimeException("Project not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Project", projectId));
 
         Sprint sprint = new Sprint(name, startDate, endDate, SprintStatus.PLANNING);
         sprint.setProject(project);
@@ -34,7 +35,7 @@ public class SprintService {
 
     public Sprint getSprintById(Long id) {
         return sprintRepo.findById(id)
-                .orElseThrow(() -> new RuntimeException("Sprint not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Sprint", id));
     }
 
     public List<Sprint> getSprintsByProject(Long projectId) {
@@ -44,7 +45,7 @@ public class SprintService {
     @Transactional
     public Sprint updateSprintStatus(Long sprintId, SprintStatus newStatus) {
         Sprint sprint = sprintRepo.findById(sprintId)
-                .orElseThrow(() -> new RuntimeException("Sprint not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Sprint", sprintId));
 
         sprint.setStatus(newStatus);
         return sprintRepo.save(sprint);
