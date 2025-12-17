@@ -1,26 +1,39 @@
 package com.legion.task;
 
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.stereotype.Service;
+import com.legion.common.exception.InvalidOperationException;
 import com.legion.common.exception.ResourceNotFoundException;
+import com.legion.common.exception.UnauthorizedException;
+import com.legion.config.TaskConfig;
 import com.legion.project.Project;
 import com.legion.project.ProjectRepository;
+import com.legion.sprint.Sprint;
+import com.legion.sprint.SprintRepository;
 import com.legion.user.User;
 import com.legion.user.UserRepository;
 import jakarta.transaction.Transactional;
 
 import java.util.List;
 
+@Service
 public class TaskService {
 
     private final TaskRepository taskRepo;
     private final ProjectRepository projectRepo;
     private final UserRepository userRepo;
+    private final TaskConfig taskConfig;
+    private final SprintRepository sprintRepo;
 
     public TaskService(TaskRepository taskRepo,
                        ProjectRepository projectRepo,
-                       UserRepository userRepo) {
+                       UserRepository userRepo,
+                       TaskConfig taskConfig, SprintRepository sprintRepo) {
         this.taskRepo = taskRepo;
         this.projectRepo = projectRepo;
         this.userRepo = userRepo;
+        this.taskConfig = taskConfig;
+        this.sprintRepo = sprintRepo;
     }
 
     /**
@@ -30,38 +43,63 @@ public class TaskService {
     @Transactional
     public Task createTask(Long projectId, Long reporterId, String title,
                            String description, TaskStatus status, Priority priority,
-                           Long assignedId) {
-        
-        // validate the existence of the project
-        Project project = projectRepo.findById(projectId)
-                .orElseThrow(() -> new RuntimeException("Project not found"));
+                           Long assigneeId) {
 
-        // Validate reporter exists
-        User reporter = userRepo.findById(reporterId)
-                .orElseThrow(() -> new RuntimeException("Reporter not found"));
+        int maxRetries = taskConfig.getCreationRetryAttempts();
+        long retryDelay = taskConfig.getCreationRetryDelayMs();
+        int attempt = 0;
 
-        // Validate reporter belongs to same workspace as project
-        if (!reporter.getWorkspace().getId().equals(project.getWorkspace().getId())) {
-            throw new RuntimeException("Reporter must belong to project's workspace");
-        }
+        while (attempt < maxRetries) {
+            try {
+                return attemptCreateTask(projectId, reporterId, title, description,
+                        status, priority, assigneeId);
+            } catch (DataIntegrityViolationException e) {
+                attempt++;
+                if (attempt >= maxRetries) {
+                    throw new InvalidOperationException(
+                            "Failed to create task after " + maxRetries + " attempts. Please try again.", e);
+                }
 
-        // Validate assignee if provided
-        User assignee = null;
-        if (assignedId != null) {
-            assignee = userRepo.findById(assignedId)
-                    .orElseThrow(() -> new RuntimeException("Assignee not found"));
-
-            // Check assignee is in same workspace
-            if (!assignee.getWorkspace().getId().equals(project.getWorkspace().getId())) {
-                throw new RuntimeException("Assignee must belong to project's workspace");
+                try {
+                    Thread.sleep(retryDelay);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw new InvalidOperationException("Task creation interrupted", ie);
+                }
             }
         }
 
-        // Auto generate task number
+        throw new InvalidOperationException("Failed to create task");
+    }
+
+    private Task attemptCreateTask(Long projectId, Long reporterId, String title,
+                                   String description, TaskStatus status,
+                                   Priority priority, Long assigneeId) {
+
+        // Use custom exceptions instead of RuntimeException
+        Project project = projectRepo.findById(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("Project", projectId));
+
+        User reporter = userRepo.findById(reporterId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", reporterId));
+
+        if (!reporter.getWorkspace().getId().equals(project.getWorkspace().getId())) {
+            throw new UnauthorizedException("Reporter must belong to project's workspace");
+        }
+
+        User assignee = null;
+        if (assigneeId != null) {
+            assignee = userRepo.findById(assigneeId)
+                    .orElseThrow(() -> new ResourceNotFoundException("User", assigneeId));
+
+            if (!assignee.getWorkspace().getId().equals(project.getWorkspace().getId())) {
+                throw new UnauthorizedException("Assignee must belong to project's workspace");
+            }
+        }
+
         Integer maxTaskNumber = taskRepo.findMaxTaskNumberByProjectId(projectId);
         Integer nextTaskNumber = maxTaskNumber + 1;
 
-        // Create Task
         Task task = new Task();
         task.setProject(project);
         task.setReporter(reporter);
@@ -102,7 +140,7 @@ public class TaskService {
     @Transactional
     public Task updateTaskStatus(Long taskId, TaskStatus newStatus) {
         Task task = taskRepo.findById(taskId)
-                .orElseThrow(() -> new RuntimeException("Task not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Task not found", taskId));
 
         task.setStatus(newStatus);
         return taskRepo.save(task);
@@ -114,10 +152,12 @@ public class TaskService {
     @Transactional
     public Task assignTaskToSprint(Long taskId, Long sprintId) {
         Task task = taskRepo.findById(taskId)
-                .orElseThrow(() -> new RuntimeException("Task not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Task not found", taskId));
 
-        // TODO: Later on Add Sprint validation
-        task.setSprint(null);
+        Sprint sprint = sprintRepo.findById(sprintId)
+                        .orElseThrow(() -> new ResourceNotFoundException("Spring not found", sprintId));
+
+        task.setSprint(sprint);
         return taskRepo.save(task);
     }
 

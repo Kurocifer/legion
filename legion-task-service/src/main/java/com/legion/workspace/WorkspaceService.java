@@ -2,6 +2,8 @@ package com.legion.workspace;
 
 import org.springframework.stereotype.Service;
 
+import com.legion.common.exception.DuplicateResourceException;
+import com.legion.common.exception.ResourceNotFoundException;
 import jakarta.transaction.Transactional;
 
 import java.util.List;
@@ -21,7 +23,7 @@ public class WorkspaceService {
     @Transactional
     public Workspace createWorkspace(String name, String slug) {
         if (workspaceRepo.existsBySlug(slug)) {
-            throw new RuntimeException("Workspace with slug'" + slug + "alredy exists");
+            throw new DuplicateResourceException("Workspac", "slug", slug);
         }
 
         Workspace workspace = new Workspace(name, slug);
@@ -33,7 +35,7 @@ public class WorkspaceService {
      */
     public Workspace getWorkspaceById(Long workspaceId) {
         return workspaceRepo.findById(workspaceId)
-                .orElseThrow(() -> new RuntimeException("Work space not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Workspace", workspaceId));
     }
 
     /**
@@ -41,7 +43,7 @@ public class WorkspaceService {
      */
     public Workspace getWorkspaceBySlug(String slug) {
         return workspaceRepo.findBySlug(slug)
-                .orElseThrow(() -> new RuntimeException("Work space not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Workspace", "slug", slug));
     }
 
     /**
