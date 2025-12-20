@@ -1,0 +1,31 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: legion-task-service
+  datasource:
+    url: jdbc:postgresql://localhost:5432/legion_tasks
+    username: legion_admin
+    password: secure_password_123
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+    show-sql: true
+
+# Custom Legion configurations
+legion:
+  # Task creation attempts config
+  task:
+    creation-retry-attempts: 3
+    creation-retry-delay-ms: 50
+
+  # JWT Config
+  jwt:
+    secret: SuperSecretJWTKeyForLegionApplicationMustBeAtLeast256BitsLongTizaDonnotforgettochangethis98475
+    expiration-ms: 86400000 # 24 hrs
