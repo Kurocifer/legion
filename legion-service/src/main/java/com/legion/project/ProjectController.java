@@ -24,7 +24,6 @@ public class ProjectController {
     @PostMapping
     public ResponseEntity<Project> createProject(@RequestBody CreateProjectRequest request) {
         Project project = projectService.createProject(
-                request.getWorkspaceId(),
                 request.getName(),
                 request.getKey(),
                 request.getDescription()
@@ -40,7 +39,7 @@ public class ProjectController {
 
     @GetMapping("/workspace/{workspaceId}")
     public ResponseEntity<List<Project>> getProjectsByWorkspace(@PathVariable Long workspaceId) {
-        List<Project> projects = projectService.getProjectsByWorkspace(workspaceId);
+        List<Project> projects = projectService.getProjectsInCurrentWorkspace();
         return ResponseEntity.ok(projects);
     }
 

@@ -1,10 +1,8 @@
 package com.legion.task;
 
-import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.stereotype.Service;
-import com.legion.common.exception.InvalidOperationException;
-import com.legion.common.exception.ResourceNotFoundException;
-import com.legion.common.exception.UnauthorizedException;
+import com.legion.common.context.WorkspaceContext;
+import com.legion.common.context.WorkspaceContextHelper;
+import com.legion.common.exception.*;
 import com.legion.config.TaskConfig;
 import com.legion.project.Project;
 import com.legion.project.ProjectRepository;
@@ -13,36 +11,38 @@ import com.legion.sprint.SprintRepository;
 import com.legion.user.User;
 import com.legion.user.UserRepository;
 import com.legion.workspace.WorkspaceMemberRepository;
-import jakarta.transaction.Transactional;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
 @Service
 public class TaskService {
 
-    private final TaskRepository taskRepo;
-    private final ProjectRepository projectRepo;
-    private final UserRepository userRepo;
+    private final TaskRepository taskRepository;
+    private final ProjectRepository projectRepository;
+    private final SprintRepository sprintRepository;
+    private final UserRepository userRepository;
+    private final WorkspaceMemberRepository workspaceMemberRepository;
     private final TaskConfig taskConfig;
-    private final SprintRepository sprintRepo;
-    private final WorkspaceMemberRepository workspaceMemberRepo;
 
-    public TaskService(TaskRepository taskRepo,
-                       ProjectRepository projectRepo,
-                       UserRepository userRepo,
-                       TaskConfig taskConfig, SprintRepository sprintRepo,
-                       WorkspaceMemberRepository workspaceMemberRepo) {
-        this.taskRepo = taskRepo;
-        this.projectRepo = projectRepo;
-        this.userRepo = userRepo;
+    public TaskService(TaskRepository taskRepository,
+                       ProjectRepository projectRepository,
+                       SprintRepository sprintRepository,
+                       UserRepository userRepository,
+                       WorkspaceMemberRepository workspaceMemberRepository,
+                       TaskConfig taskConfig) {
+        this.taskRepository = taskRepository;
+        this.projectRepository = projectRepository;
+        this.sprintRepository = sprintRepository;
+        this.userRepository = userRepository;
+        this.workspaceMemberRepository = workspaceMemberRepository;
         this.taskConfig = taskConfig;
-        this.sprintRepo = sprintRepo;
-        this.workspaceMemberRepo = workspaceMemberRepo;
     }
 
     /**
-     * Create a new task with auto-increment task number,
-     * ensuring each task has a unique identification for a project
+     * Creates a new task with workspace validation and auto-incremented task number.
      */
     @Transactional
     public Task createTask(Long projectId, Long reporterId, String title,
@@ -80,30 +80,39 @@ public class TaskService {
                                    String description, TaskStatus status,
                                    Priority priority, Long assigneeId) {
 
-        // Use custom exceptions instead of RuntimeException
-        Project project = projectRepo.findById(projectId)
+        // Validate project exists
+        Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Project", projectId));
 
-        User reporter = userRepo.findById(reporterId)
+        // Validate project belongs to current workspace
+        WorkspaceContextHelper.validateWorkspace(project.getWorkspace().getId());
+
+        // Validate reporter exists
+        User reporter = userRepository.findById(reporterId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", reporterId));
 
-        if (!workspaceMemberRepo.existsByUserIdAndWorkspaceId(reporterId, project.getWorkspace().getId())) {
+        // Validate reporter is in current workspace
+        Long workspaceId = WorkspaceContext.getWorkspaceId();
+        if (!workspaceMemberRepository.existsByUserIdAndWorkspaceId(reporter.getId(), workspaceId)) {
             throw new UnauthorizedException("You must be a member of this workspace");
         }
 
+        // Validate assignee if provided
         User assignee = null;
         if (assigneeId != null) {
-            assignee = userRepo.findById(assigneeId)
+            assignee = userRepository.findById(assigneeId)
                     .orElseThrow(() -> new ResourceNotFoundException("User", assigneeId));
 
-            if (!workspaceMemberRepo.existsByUserIdAndWorkspaceId(assigneeId, project.getWorkspace().getId())) {
-                throw new UnauthorizedException("Assignee must belong to project's workspace");
+            if (!workspaceMemberRepository.existsByUserIdAndWorkspaceId(assignee.getId(), workspaceId)) {
+                throw new UnauthorizedException("Assignee must be a member of this workspace");
             }
         }
 
-        Integer maxTaskNumber = taskRepo.findMaxTaskNumberByProjectId(projectId);
+        // Auto-generate task number
+        Integer maxTaskNumber = taskRepository.findMaxTaskNumberByProjectId(projectId);
         Integer nextTaskNumber = maxTaskNumber + 1;
 
+        // Create task
         Task task = new Task();
         task.setProject(project);
         task.setReporter(reporter);
@@ -114,59 +123,134 @@ public class TaskService {
         task.setPriority(priority);
         task.setTaskNumber(nextTaskNumber);
 
-        return taskRepo.save(task);
+        return taskRepository.save(task);
     }
 
     /**
-     * Get all tasks for a project
+     * Gets a task by ID with workspace validation.
+     */
+    public Task getTaskById(Long taskId) {
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new ResourceNotFoundException("Task", taskId));
+
+        // Validate task belongs to current workspace
+        WorkspaceContextHelper.validateWorkspace(task.getProject().getWorkspace().getId());
+
+        return task;
+    }
+
+    /**
+     * Gets all tasks for a project with workspace validation.
      */
     public List<Task> getTasksByProject(Long projectId) {
-        return taskRepo.findByProjectId(projectId);
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("Project", projectId));
+
+        // Validate project belongs to current workspace
+        WorkspaceContextHelper.validateWorkspace(project.getWorkspace().getId());
+
+        return taskRepository.findByProjectId(projectId);
     }
 
     /**
-     * Get all tasks for a sprint
+     * Gets all tasks for a sprint with workspace validation.
      */
     public List<Task> getTasksBySprint(Long sprintId) {
-        return taskRepo.findBySprintId(sprintId);
+        Sprint sprint = sprintRepository.findById(sprintId)
+                .orElseThrow(() -> new ResourceNotFoundException("Sprint", sprintId));
+
+        // Validate sprint's project belongs to current workspace
+        WorkspaceContextHelper.validateWorkspace(sprint.getProject().getWorkspace().getId());
+
+        return taskRepository.findBySprintId(sprintId);
     }
 
     /**
-     * Get all tasks assigned to a user
+     * Gets all tasks assigned to a user in current workspace.
      */
     public List<Task> getTasksByAssignee(Long assigneeId) {
-        return taskRepo.findByAssigneeId(assigneeId);
+        // Validate assignee exists
+        User assignee = userRepository.findById(assigneeId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", assigneeId));
+
+        // Validate assignee is in current workspace
+        Long workspaceId = WorkspaceContextHelper.requireWorkspaceId();
+        if (!workspaceMemberRepository.existsByUserIdAndWorkspaceId(assignee.getId(), workspaceId)) {
+            throw new UnauthorizedException("User is not a member of this workspace");
+        }
+
+        return taskRepository.findByAssigneeId(assigneeId);
     }
 
     /**
-     * Update task status
+     * Updates task status with workspace validation.
      */
     @Transactional
     public Task updateTaskStatus(Long taskId, TaskStatus newStatus) {
-        Task task = taskRepo.findById(taskId)
-                .orElseThrow(() -> new ResourceNotFoundException("Task not found", taskId));
-
+        Task task = getTaskById(taskId);
         task.setStatus(newStatus);
-        return taskRepo.save(task);
+        return taskRepository.save(task);
     }
 
     /**
-     * Assign task to sprint
+     * Assigns task to sprint with workspace validation.
      */
     @Transactional
     public Task assignTaskToSprint(Long taskId, Long sprintId) {
-        Task task = taskRepo.findById(taskId)
-                .orElseThrow(() -> new ResourceNotFoundException("Task not found", taskId));
+        Task task = getTaskById(taskId);
 
-        Sprint sprint = sprintRepo.findById(sprintId)
-                        .orElseThrow(() -> new ResourceNotFoundException("Spring not found", sprintId));
+        if (sprintId != null) {
+            Sprint sprint = sprintRepository.findById(sprintId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Sprint", sprintId));
 
-        task.setSprint(sprint);
-        return taskRepo.save(task);
+            WorkspaceContextHelper.validateWorkspace(sprint.getProject().getWorkspace().getId());
+
+            // validated task and sprint are in same project
+            if (!task.getProject().getId().equals(sprint.getProject().getId())) {
+                throw new InvalidOperationException("Task and sprint must be in the same project");
+            }
+
+            task.setSprint(sprint);
+        } else {
+            // Unassign from sprint
+            task.setSprint(null);
+        }
+
+        return taskRepository.save(task);
     }
 
-    public Task getTaskById(Long taskId) {
-        return taskRepo.findById(taskId)
-                .orElseThrow(() -> new ResourceNotFoundException("Task", taskId));
+    /**
+     * Updates task assignee with workspace validation.
+     */
+    @Transactional
+    public Task updateTaskAssignee(Long taskId, Long assigneeId) {
+        Task task = getTaskById(taskId);
+
+        if (assigneeId != null) {
+            User assignee = userRepository.findById(assigneeId)
+                    .orElseThrow(() -> new ResourceNotFoundException("User", assigneeId));
+
+            // Validate assignee is in current workspace
+            Long workspaceId = WorkspaceContext.getWorkspaceId();
+            if (!workspaceMemberRepository.existsByUserIdAndWorkspaceId(assignee.getId(), workspaceId)) {
+                throw new UnauthorizedException("Assignee must be a member of this workspace");
+            }
+
+            task.setAssignee(assignee);
+        } else {
+            // Unassign
+            task.setAssignee(null);
+        }
+
+        return taskRepository.save(task);
+    }
+
+    /**
+     * Deletes a task with workspace validation.
+     */
+    @Transactional
+    public void deleteTask(Long taskId) {
+        Task task = getTaskById(taskId);
+        taskRepository.delete(task);
     }
 }
