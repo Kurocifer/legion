@@ -14,7 +14,7 @@ import java.util.List;
  * REST controller for workspace operations.
  */
 @RestController
-@RequestMapping("/legion/api/workspaces")
+@RequestMapping("api/workspaces")
 public class WorkspaceController {
 
     private final WorkspaceService workspaceService;

@@ -10,7 +10,7 @@ import lombok.Setter;
 import java.util.List;
 
 @RestController
-@RequestMapping("/legion/api/tasks")
+@RequestMapping("/api/tasks")
 public class TaskController {
 
     private final TaskService taskService;
@@ -37,6 +37,13 @@ public class TaskController {
     public ResponseEntity<Task> getTaskById(@PathVariable Long id) {
         Task task = taskService.getTaskById(id);
         return ResponseEntity.ok(task);
+    }
+
+    // NEW: Get all tasks in workspace
+    @GetMapping
+    public ResponseEntity<List<Task>> getAllTasks() {
+        List<Task> tasks = taskService.getAllTasksInWorkspace();
+        return ResponseEntity.ok(tasks);
     }
 
     @GetMapping("/project/{projectId}")
@@ -73,6 +80,31 @@ public class TaskController {
         return ResponseEntity.ok(task);
     }
 
+    // NEW: Update task details
+    @PutMapping("/{id}")
+    public ResponseEntity<Task> updateTask(
+            @PathVariable Long id,
+            @RequestBody UpdateTaskRequest request) {
+        Task task = taskService.updateTask(id, request);
+        return ResponseEntity.ok(task);
+    }
+
+    // NEW: Update task assignee
+    @PatchMapping("/{id}/assignee")
+    public ResponseEntity<Task> assignTaskToUser(
+            @PathVariable Long id,
+            @RequestBody AssignTaskToUserRequest request) {
+        Task task = taskService.updateTaskAssignee(id, request.getAssigneeId());
+        return ResponseEntity.ok(task);
+    }
+
+    // NEW: Delete task
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteTask(@PathVariable Long id) {
+        taskService.deleteTask(id);
+        return ResponseEntity.noContent().build();
+    }
+
     // DTOs
     @Setter
     @Getter
@@ -84,20 +116,31 @@ public class TaskController {
         private TaskStatus status;
         private Priority priority;
         private Long assigneeId;
-
     }
 
     @Setter
     @Getter
     public static class UpdateTaskStatusRequest {
         private TaskStatus status;
-
     }
 
     @Setter
     @Getter
     public static class AssignTaskToSprintRequest {
         private Long sprintId;
+    }
 
+    @Setter
+    @Getter
+    public static class UpdateTaskRequest {
+        private String title;
+        private String description;
+        private Priority priority;
+    }
+
+    @Setter
+    @Getter
+    public static class AssignTaskToUserRequest {
+        private Long assigneeId;
     }
 }

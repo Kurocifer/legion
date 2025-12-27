@@ -253,4 +253,34 @@ public class TaskService {
         Task task = getTaskById(taskId);
         taskRepository.delete(task);
     }
+
+    /**
+     * Gets all tasks in current workspace.
+     */
+    public List<Task> getAllTasksInWorkspace() {
+        Long workspaceId = WorkspaceContextHelper.requireWorkspaceId();
+        return taskRepository.findAllByWorkspaceId(workspaceId);
+    }
+
+    /**
+     * Updates task details (title, description, priority).
+     */
+    @Transactional
+    public Task updateTask(Long taskId, TaskController.UpdateTaskRequest request) {
+        Task task = getTaskById(taskId);
+
+        if (request.getTitle() != null && !request.getTitle().trim().isEmpty()) {
+            task.setTitle(request.getTitle().trim());
+        }
+
+        if (request.getDescription() != null) {
+            task.setDescription(request.getDescription().trim());
+        }
+
+        if (request.getPriority() != null) {
+            task.setPriority(request.getPriority());
+        }
+
+        return taskRepository.save(task);
+    }
 }

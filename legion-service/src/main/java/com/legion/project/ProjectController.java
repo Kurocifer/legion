@@ -11,7 +11,7 @@ import lombok.Setter;
 import java.util.List;
 
 @RestController
-@RequestMapping("/legion/api/projects")
+@RequestMapping("api/projects")
 public class ProjectController {
 
     private final ProjectService projectService;

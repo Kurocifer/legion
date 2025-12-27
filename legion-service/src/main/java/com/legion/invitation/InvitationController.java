@@ -16,7 +16,7 @@ import java.util.List;
  * REST controller for invitation operations.
  */
 @RestController
-@RequestMapping("/legion/api/invitations")
+@RequestMapping("/api/invitations")
 public class InvitationController {
 
     private final InvitationService invitationService;

@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.*;
  * REST controller for authentication endpoints.
  */
 @RestController
-@RequestMapping("/legion/api/auth")
+@RequestMapping("/api/auth")
 public class AuthController {
 
     private final AuthService authService;

@@ -12,7 +12,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 @RestController
-@RequestMapping("/legion/api/sprints")
+@RequestMapping("/api/sprints")
 public class SprintController {
 
     private final SprintService sprintService;
