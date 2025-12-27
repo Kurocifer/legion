@@ -28,4 +28,8 @@ legion:
   # JWT Config
   jwt:
     secret: SuperSecretJWTKeyForLegionApplicationMustBeAtLeast256BitsLongTizaDonnotforgettochangethis98475
-    expiration-ms: 86400000 # 24 hrs
+    expiration-ms: 7889400000 # 3 montsh
+
+# CORS Config
+cors:
+  allowed-origins: http://localhost:3000

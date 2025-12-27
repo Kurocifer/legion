@@ -4,6 +4,8 @@ import com.legion.user.Role;
 import com.legion.user.User;
 import lombok.Getter;
 import lombok.Setter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -16,8 +18,10 @@ import java.util.List;
  * REST controller for invitation operations.
  */
 @RestController
-@RequestMapping("/legion/api/invitations")
+@RequestMapping("/api/invitations")
 public class InvitationController {
+
+    private static final Logger log = LoggerFactory.getLogger(InvitationController.class);
 
     private final InvitationService invitationService;
 
@@ -33,11 +37,26 @@ public class InvitationController {
             @RequestBody CreateInvitationRequest request,
             @AuthenticationPrincipal User currentUser) {
 
+        log.info(
+                "Invitation creation attempt email={} workspaceId={} role={} invitedBy={}",
+                request.getEmail(),
+                request.getWorkspaceId(),
+                request.getRole(),
+                currentUser.getEmail()
+        );
+
         Invitation invitation = invitationService.createInvitation(
                 request.getEmail(),
                 request.getWorkspaceId(),
                 request.getRole(),
                 currentUser
+        );
+
+        log.info(
+                "Invitation created id={} email={} workspaceId={}",
+                invitation.getId(),
+                invitation.getEmail(),
+                invitation.getWorkspace().getId()
         );
 
         InvitationResponse response = new InvitationResponse(
@@ -56,7 +75,17 @@ public class InvitationController {
      */
     @GetMapping("/token/{token}")
     public ResponseEntity<InvitationDetailsResponse> getInvitationByToken(@PathVariable String token) {
+
+        log.debug("Fetching invitation by token={}", token);
+
         Invitation invitation = invitationService.getInvitationByToken(token);
+
+        log.info(
+                "Invitation token resolved email={} workspace={} role={}",
+                invitation.getEmail(),
+                invitation.getWorkspace().getName(),
+                invitation.getRole()
+        );
 
         InvitationDetailsResponse response = new InvitationDetailsResponse(
                 invitation.getEmail(),
@@ -73,7 +102,17 @@ public class InvitationController {
      */
     @GetMapping("/workspace/{workspaceId}")
     public ResponseEntity<List<Invitation>> getWorkspaceInvitations(@PathVariable Long workspaceId) {
+
+        log.debug("Fetching invitations for workspaceId={}", workspaceId);
+
         List<Invitation> invitations = invitationService.getWorkspaceInvitations(workspaceId);
+
+        log.info(
+                "Fetched {} invitations for workspaceId={}",
+                invitations.size(),
+                workspaceId
+        );
+
         return ResponseEntity.ok(invitations);
     }
 
@@ -84,7 +123,6 @@ public class InvitationController {
         private String email;
         private Long workspaceId;
         private Role role;
-
     }
 
     @Getter
@@ -102,7 +140,6 @@ public class InvitationController {
             this.role = role;
             this.expiresAt = expiresAt;
         }
-
     }
 
     @Getter
@@ -118,6 +155,5 @@ public class InvitationController {
             this.role = role;
             this.expiresAt = expiresAt;
         }
-
     }
 }

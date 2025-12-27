@@ -10,6 +10,8 @@ import com.legion.workspace.Workspace;
 import com.legion.workspace.WorkspaceMember;
 import com.legion.workspace.WorkspaceMemberRepository;
 import com.legion.workspace.WorkspaceRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,6 +22,8 @@ import java.util.List;
  */
 @Service
 public class InvitationService {
+
+    private static final Logger log = LoggerFactory.getLogger(InvitationService.class);
 
     private final InvitationRepository invitationRepository;
     private final WorkspaceRepository workspaceRepository;
@@ -33,73 +37,90 @@ public class InvitationService {
         this.workspaceMemberRepository = workspaceMemberRepository;
     }
 
-    /**
-     * Creates an invitation for a user to join a workspace.
-     *
-     * @param email email of user to invite
-     * @param workspaceId workspace to invite to
-     * @param role role to assign (DEVELOPER, MANAGER, ADMIN)
-     * @param invitedBy user sending the invitation (must be ADMIN or MANAGER)
-     * @return created invitation
-     */
     @Transactional
     public Invitation createInvitation(String email, Long workspaceId, Role role, User invitedBy) {
 
-        // Validate workspace exists
+        log.info(
+                "Creating invitation email={} workspaceId={} role={} invitedBy={}",
+                email,
+                workspaceId,
+                role,
+                invitedBy.getEmail()
+        );
+
         Workspace workspace = workspaceRepository.findById(workspaceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Workspace", workspaceId));
 
-        // Validate inviter is ADMIN or MANAGER in this workspace
         WorkspaceMember inviterMembership = workspaceMemberRepository
                 .findByUserIdAndWorkspaceId(invitedBy.getId(), workspaceId)
                 .orElseThrow(() -> new UnauthorizedException("You are not a member of this workspace"));
 
         if (inviterMembership.getRole() != Role.ADMIN && inviterMembership.getRole() != Role.MANAGER) {
+            log.warn(
+                    "Unauthorized invitation attempt by user={} role={} workspaceId={}",
+                    invitedBy.getEmail(),
+                    inviterMembership.getRole(),
+                    workspaceId
+            );
             throw new UnauthorizedException("Only ADMIN or MANAGER can invite users");
         }
 
-        // Check if user is already in workspace
         if (workspaceMemberRepository.existsByWorkspaceIdAndUserEmail(workspaceId, email)) {
+            log.warn(
+                    "Invitation failed: user already in workspace email={} workspaceId={}",
+                    email,
+                    workspaceId
+            );
             throw new DuplicateResourceException("User", "email", email + " is already in this workspace");
         }
 
-        // Check if pending invitation already exists
         if (invitationRepository.existsByEmailAndWorkspaceIdAndUsedFalse(email, workspaceId)) {
+            log.warn(
+                    "Invitation failed: pending invitation already exists email={} workspaceId={}",
+                    email,
+                    workspaceId
+            );
             throw new DuplicateResourceException("Invitation", "email", email + " already has a pending invitation");
         }
 
-        // Create invitation
         Invitation invitation = new Invitation(email, workspace, role, invitedBy);
-        return invitationRepository.save(invitation);
+        Invitation saved = invitationRepository.save(invitation);
+
+        log.info(
+                "Invitation created id={} email={} workspaceId={}",
+                saved.getId(),
+                email,
+                workspaceId
+        );
+
+        return saved;
     }
 
-    /**
-     * Gets an invitation by token and validates it.
-     *
-     * @param token invitation token
-     * @return invitation if valid
-     */
     public Invitation getInvitationByToken(String token) {
+
+        log.debug("Validating invitation token={}", token);
+
         Invitation invitation = invitationRepository.findByToken(token)
                 .orElseThrow(() -> new ResourceNotFoundException("Invitation", "token", token));
 
-        // Validate invitation
         if (invitation.isUsed()) {
+            log.warn("Invitation already used id={}", invitation.getId());
             throw new InvalidOperationException("This invitation has already been used");
         }
 
         if (invitation.isExpired()) {
+            log.warn("Invitation expired id={}", invitation.getId());
             throw new InvalidOperationException("This invitation has expired");
         }
 
         return invitation;
     }
 
-    /**
-     * Marks an invitation as used.
-     */
     @Transactional
     public void markInvitationAsUsed(Long invitationId) {
+
+        log.info("Marking invitation as used id={}", invitationId);
+
         Invitation invitation = invitationRepository.findById(invitationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Invitation", invitationId));
 
@@ -107,10 +128,10 @@ public class InvitationService {
         invitationRepository.save(invitation);
     }
 
-    /**
-     * Gets all invitations for a workspace.
-     */
     public List<Invitation> getWorkspaceInvitations(Long workspaceId) {
+
+        log.debug("Fetching invitations for workspaceId={}", workspaceId);
+
         return invitationRepository.findByWorkspaceId(workspaceId);
     }
 }

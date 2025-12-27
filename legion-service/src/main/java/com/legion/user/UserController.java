@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.*;
  * REST controller for user operations.
  */
 @RestController
-@RequestMapping("/legion/api/users")
+@RequestMapping("/api/users")
 public class UserController {
 
     private final UserService userService;

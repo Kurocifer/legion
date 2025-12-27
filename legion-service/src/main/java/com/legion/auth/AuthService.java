@@ -13,6 +13,8 @@ import com.legion.user.User;
 import com.legion.user.UserRepository;
 import com.legion.workspace.WorkspaceMember;
 import com.legion.workspace.WorkspaceMemberRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +24,8 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class AuthService {
+
+    private static final Logger log = LoggerFactory.getLogger(AuthService.class);
 
     private final UserRepository userRepository;
     private final WorkspaceMemberRepository workspaceMemberRepository;
@@ -41,22 +45,16 @@ public class AuthService {
         this.jwtUtil = jwtUtil;
     }
 
-    /**
-     * Registers a new user.
-     * User must create or join a workspace after registration.
-     *
-     * @param request registration details
-     * @return authentication response with JWT token
-     */
     @Transactional
     public AuthResponse register(RegisterRequest request) {
 
-        // Check if email already exists
+        log.info("Registering new user email={}", request.getEmail());
+
         if (userRepository.existsByEmail(request.getEmail())) {
+            log.warn("Registration failed: email already exists={}", request.getEmail());
             throw new DuplicateResourceException("User", "email", request.getEmail());
         }
 
-        // Create user
         User user = new User();
         user.setEmail(request.getEmail());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
@@ -64,47 +62,50 @@ public class AuthService {
 
         user = userRepository.save(user);
 
-        // Generate JWT token
+        log.info("User registered successfully id={} email={}", user.getId(), user.getEmail());
+
         String token = jwtUtil.generateToken(user.getEmail());
 
         return new AuthResponse(token, UserDto.fromUser(user));
     }
 
-    /**
-     * Accepts an invitation and adds user to workspace.
-     * If user doesn't exist, creates account first.
-     *
-     * @param token invitation token
-     * @param email email (must match invitation)
-     * @param password user's password
-     * @param fullName user's full name
-     * @return authentication response with JWT token
-     */
     @Transactional
     public AuthResponse acceptInvitation(String token, String email, String password, String fullName) {
 
-        // Validate invitation
+        log.info("Processing invitation acceptance email={} token={}", email, token);
+
         Invitation invitation = invitationService.getInvitationByToken(token);
 
-        // Verify email matches
         if (!invitation.getEmail().equalsIgnoreCase(email)) {
+            log.warn(
+                    "Invitation email mismatch: expected={} provided={}",
+                    invitation.getEmail(),
+                    email
+            );
             throw new UnauthorizedException("This invitation is for " + invitation.getEmail());
         }
 
         User user;
 
-        // Check if user already exists
         if (userRepository.existsByEmail(email)) {
-            // Existing user
+            log.info("Existing user accepting invitation email={}", email);
+
             user = userRepository.findByEmail(email)
                     .orElseThrow(() -> new InvalidOperationException("User lookup failed"));
 
-            // Check if already in workspace
-            if (workspaceMemberRepository.existsByUserIdAndWorkspaceId(user.getId(), invitation.getWorkspace().getId())) {
-                throw new DuplicateResourceException("User", "email", email + " is already in this workspace");
+            if (workspaceMemberRepository.existsByUserIdAndWorkspaceId(
+                    user.getId(),
+                    invitation.getWorkspace().getId()
+            )) {
+                throw new DuplicateResourceException(
+                        "User",
+                        "email",
+                        email + " is already in this workspace"
+                );
             }
         } else {
-            // New user - create account
+            log.info("Creating new user from invitation email={}", email);
+
             user = new User();
             user.setEmail(email);
             user.setPassword(passwordEncoder.encode(password));
@@ -112,37 +113,42 @@ public class AuthService {
             user = userRepository.save(user);
         }
 
-        // Add user to workspace with invited role
-        WorkspaceMember member = new WorkspaceMember(user, invitation.getWorkspace(), invitation.getRole());
+        log.info(
+                "Adding user={} to workspaceId={} with role={}",
+                user.getEmail(),
+                invitation.getWorkspace().getId(),
+                invitation.getRole()
+        );
+
+        WorkspaceMember member =
+                new WorkspaceMember(user, invitation.getWorkspace(), invitation.getRole());
         workspaceMemberRepository.save(member);
 
-        // Mark invitation as used
         invitationService.markInvitationAsUsed(invitation.getId());
+        log.info("Invitation marked as used id={}", invitation.getId());
 
-        // Generate JWT token
         String jwtToken = jwtUtil.generateToken(user.getEmail());
 
         return new AuthResponse(jwtToken, UserDto.fromUser(user));
     }
 
-    /**
-     * Authenticates a user and generates a JWT token.
-     *
-     * @param request login credentials
-     * @return authentication response with JWT token
-     */
     public AuthResponse login(LoginRequest request) {
 
-        // Find user by email
-        User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new InvalidOperationException("Invalid email or password"));
+        log.info("Login attempt email={}", request.getEmail());
 
-        // Verify password
+        User user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> {
+                    log.warn("Login failed: user not found email={}", request.getEmail());
+                    return new InvalidOperationException("Invalid email or password");
+                });
+
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+            log.warn("Login failed: invalid password email={}", request.getEmail());
             throw new InvalidOperationException("Invalid email or password");
         }
 
-        // Generate JWT token
+        log.info("Login successful email={}", user.getEmail());
+
         String token = jwtUtil.generateToken(user.getEmail());
 
         return new AuthResponse(token, UserDto.fromUser(user));

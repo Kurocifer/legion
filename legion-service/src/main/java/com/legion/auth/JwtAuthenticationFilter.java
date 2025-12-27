@@ -9,6 +9,8 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -21,17 +23,11 @@ import java.util.Optional;
 
 /**
  * JWT Authentication Filter.
- *
- * <p>Extracts and validates:</p>
- * <ul>
- *   <li>JWT token from Authorization header</li>
- *   <li>Workspace ID from X-Workspace-Id header</li>
- *   <li>User's role in that workspace</li>
- * </ul>
- *
  */
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
+
+    private static final Logger log = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
 
     private final JwtUtil jwtUtil;
     private final UserRepository userRepository;
@@ -57,32 +53,44 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String token = extractToken(authHeader);
 
             if (token == null) {
+                log.debug("No JWT token found for request {}", request.getRequestURI());
                 filterChain.doFilter(request, response);
                 return;
             }
 
             String username = jwtUtil.extractUsername(token);
 
-            if (username == null || SecurityContextHolder.getContext().getAuthentication() != null) {
+            if (username == null) {
+                log.warn("JWT token does not contain a username");
+                filterChain.doFilter(request, response);
+                return;
+            }
+
+            if (SecurityContextHolder.getContext().getAuthentication() != null) {
+                log.debug("Security context already populated for user={}", username);
                 filterChain.doFilter(request, response);
                 return;
             }
 
             User user = userRepository.findByEmail(username).orElse(null);
 
-            if (user == null || !jwtUtil.validateToken(token, username)) {
+            if (user == null) {
+                log.warn("JWT authentication failed: user not found for email={}", username);
                 filterChain.doFilter(request, response);
                 return;
             }
 
-            // User is valid - authenticate with or without workspace
+            if (!jwtUtil.validateToken(token, username)) {
+                log.warn("Invalid JWT token for email={}", username);
+                filterChain.doFilter(request, response);
+                return;
+            }
+
             authenticateUser(user, workspaceIdHeader);
 
             filterChain.doFilter(request, response);
 
         } finally {
-            // Clear the workspace value from the context after request is complete
-            // to avid memory lieaks
             WorkspaceContext.clear();
         }
     }
@@ -96,6 +104,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private void authenticateUser(User user, String workspaceIdHeader) {
         if (workspaceIdHeader == null || workspaceIdHeader.isEmpty()) {
+            log.debug(
+                    "No workspace header provided, authenticating user={} without workspace",
+                    user.getEmail()
+            );
             authenticateWithoutRole(user);
             return;
         }
@@ -104,6 +116,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             Long workspaceId = Long.parseLong(workspaceIdHeader);
             authenticateWithWorkspace(user, workspaceId);
         } catch (NumberFormatException e) {
+            log.warn("Invalid workspace id header value={}", workspaceIdHeader);
             authenticateWithoutRole(user);
         }
     }
@@ -114,6 +127,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         if (roleOpt.isPresent()) {
             WorkspaceContext.setWorkspaceId(workspaceId);
+
+            log.info(
+                    "Authenticated user={} in workspaceId={} with role={}",
+                    user.getEmail(),
+                    workspaceId,
+                    roleOpt.get()
+            );
 
             UsernamePasswordAuthenticationToken authToken =
                     new UsernamePasswordAuthenticationToken(
@@ -126,17 +146,23 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             SecurityContextHolder.getContext().setAuthentication(authToken);
         } else {
+            log.warn(
+                    "User={} does not belong to workspaceId={}, authenticating without role",
+                    user.getEmail(),
+                    workspaceId
+            );
             authenticateWithoutRole(user);
         }
     }
 
-    // TODO: Update this method name to a better name
     private void authenticateWithoutRole(User user) {
+        log.debug("Authenticated user={} without workspace context", user.getEmail());
+
         UsernamePasswordAuthenticationToken authToken =
                 new UsernamePasswordAuthenticationToken(
                         user,
                         null,
-                        Collections.emptyList() // Role is no longer relevant to be attached to a user every time in this case the user exists without a role and thus out of any workspace
+                        Collections.emptyList()
                 );
 
         SecurityContextHolder.getContext().setAuthentication(authToken);
