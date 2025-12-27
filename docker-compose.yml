@@ -39,6 +39,19 @@ services:
     networks:
       - legion-network
     restart: unless-stopped
+  
+  frontend:
+    build:
+      context: ./legion-frontend
+      dockerfile: Dockerfile
+    container_name: legion-frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - legion-network
+    restart: unless-stopped
 
 
 volumes:
