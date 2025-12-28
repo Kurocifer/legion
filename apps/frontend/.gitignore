@@ -23,6 +23,12 @@ dist-ssr
 *.sln
 *.sw?
 
-# Private stuffs
+# Environtment variables
 .env
-.env.example
+.env.local
+.env.production
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db

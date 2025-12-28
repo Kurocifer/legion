@@ -32,8 +32,3 @@ legion:
     
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGIN:http://localhost:3000}
-
-
-  jdbc:postgresql://localhost:5432/legion_db
-  legion_admin
-  Katen_Kyokotsu

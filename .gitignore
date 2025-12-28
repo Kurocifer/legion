@@ -1,33 +1,73 @@
-HELP.md
-target/
-.mvn/wrapper/maven-wrapper.jar
-!**/src/main/**/target/
-!**/src/test/**/target/
+# ENVIRONMENT VARIABLES
+.env
+.env.local
+.env.*.local
+apps/*/.env
+apps/*/.env.local
 
-### STS ###
-.apt_generated
-.classpath
-.factorypath
-.project
-.settings
-.springBeans
-.sts4-cache
+# BUILD ARTIFACTS
 
-### IntelliJ IDEA ###
-.idea
-*.iws
-*.iml
-*.ipr
+# Backend
+apps/backend/target/
+apps/backend/.mvn/
+apps/backend/mvnw
+apps/backend/mvnw.cmd
 
-### NetBeans ###
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
-build/
-!**/src/main/**/build/
-!**/src/test/**/build/
+# Frontend
+apps/frontend/dist/
+apps/frontend/node_modules/
+apps/frontend/.vite/
 
-### VS Code ###
+# IDE
+.idea/
 .vscode/
+*.iml
+*.iws
+*.ipr
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# TERRAFORM
+infrastructure/terraform/**/.terraform/
+infrastructure/terraform/**/*.tfstate
+infrastructure/terraform/**/*.tfstate.*
+infrastructure/terraform/**/.terraform.lock.hcl
+infrastructure/terraform/**/terraform.tfvars
+**/.terraform/
+
+# ANSIBLE
+infrastructure/ansible/*.retry
+infrastructure/ansible/.vault_pass
+
+# KUBERNETES
+infrastructure/kubernetes/overlays/*/secrets.yaml
+infrastructure/kubernetes/**/secrets.yaml
+
+# DOCKER
+docker-compose.override.yml
+
+# OS FILES
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# LOGS
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# SECRETS & KEYS
+*.pem
+*.key
+*.crt
+*.p12
+*.jks
+secrets/
