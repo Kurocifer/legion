@@ -1,0 +1,39 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: legion-service
+  datasource:
+    url: ${SPRING_DATABASE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: ${SPRING_JPA_DDL_AUTO:update}
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: ${SPRING_JPA_FORMAT_SQL:false}
+    show-sql: ${SPRING_JPA_SHOW_SQL:false}
+
+# Custom Legion configurations
+legion:
+  # Task creation attempts config
+  task:
+    creation-retry-attempts: 3
+    creation-retry-delay-ms: 50
+
+  # JWT Config
+  jwt:
+    secret: ${LEGION_JWT_SECRET}
+    expiration-ms: ${LEGION_JWT_EXPIRATION:7889400000}
+    
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGIN:http://localhost:3000}
+
+
+  jdbc:postgresql://localhost:5432/legion_db
+  legion_admin
+  Katen_Kyokotsu
